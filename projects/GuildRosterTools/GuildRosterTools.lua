@@ -123,19 +123,6 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
   GuildRosterTools:
 end
 
-  --[[local JScanBot = Apollo.GetAddon("JScanBot")
-
-  local strRoster = tRoster
-  if strRoster == not nil then 
-    local strPath = "c:\\temp\\test.txt"
-    JScanBot:OpenFile(strPath, false)
-    JScanBot:WriteToFile(strPath, strRoster)
-    JScanBot:CloseFile(strPath) --local JScanBot = Apollo.GetAddon("JScanBot") JScanBot:CloseFile("c:\\temp\\test.txt")
-  else
-    Print('Data table nil')
-  end
-end]]
-
 function GuildRosterTools:ExportData()
   local tGuild = self:GetGuild()
     if tGuild then
