@@ -120,7 +120,7 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
     local tGuild = self:GetGuild()
     local guildName = tGuild:GetName()
     local tRanks = guildCurr:GetRanks()
-    local s = ""
+    local strPlayerDataRow = ""
     local JScanBot = Apollo.GetAddon("JScanBot")
     local strPath = "c:\\WildStarRosters\\"..guildName .. ".Roster.csv"
     local timeStamp = (time .. " " .. date)
