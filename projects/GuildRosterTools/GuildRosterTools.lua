@@ -1,4 +1,4 @@
----------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------------
 -- Client Lua Script for GuildRosterTools
 -- Copyright (c) NCsoft. All rights reserved
 -----------------------------------------------------------------------------------------------
@@ -28,14 +28,38 @@ function GuildRosterTools:new(o)
     self.__index = self 
 
     -- initialize variables here
-
+	self.troster = nil
+	self.timeLastExported = nil
     return o
 end
 
 function GuildRosterTools:Init()
     Apollo.RegisterAddon(self)
 end
- 
+
+function GuildRosterTools:OnSave(eLevel)
+	-- We save at a character level in case of alts in different guilds
+		if (eLevel ~= GameLib.CodeEnumAddonSaveLevel.Character) then
+		return
+	end
+
+	tSave = {}
+	
+	self.timeLastExported = timeLastExported
+	tSave = {nTimeLastExported = self.timeLastExported}	
+	return tSave
+end
+
+function GuildRosterTools:OnRestore(eLevel,tSavedData)
+	if tSavedData.nTimeLastExported ~= nil then
+		self.timeLastExported = tSavedData.nTimeLastExported
+	else
+		self.timeLastExported = 0
+	end
+	
+	
+
+end  
 
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools OnLoad
@@ -43,7 +67,7 @@ end
 function GuildRosterTools:OnLoad()
     -- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("GuildRosterTools.xml")
-	self.troster = nil
+	
 end
 
 -----------------------------------------------------------------------------------------------
@@ -79,7 +103,10 @@ function GuildRosterTools:GetAsyncLoadStatus()
     	Apollo.RegisterEventHandler("GuildRoster", "OnGuildRoster", self)
 
 		-- Do additional Addon initialization here
-		
+		if self.timeLastExported == nil then
+		  timeLastExported = 0
+		else timeLastExported = self.timeLastExported
+		end
 		-- register our Addon so others can wait for it if they want
 		g_AddonsLoaded["GuildRosterTools"] = true
 		
@@ -98,29 +125,54 @@ function GuildRosterTools:OnGuildRosterToolsOn()
 	self.wndMain:Show(true) -- show the window
 end
 
-function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
-  local date = os.date("%m%d%y")
-  local time = os.date("%H%M")
-  local tGuild = self:GetGuild()
-  local guildName = tGuild:GetName()
-  local tRanks = guildCurr:GetRanks()
-  local s = ""
-  local JScanBot = Apollo.GetAddon("JScanBot")
-  local strPath = "c:\\WildStarRosters\\"..guildName .."."..date..".".. time..".Roster.csv"
-  JScanBot:OpenFile(strPath, true)
-  local headers = ("Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
-  JScanBot:WriteToFile(strPath,headers)
 
-  for key, tCurr in pairs(tGuildRoster) do
-  	if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
-      strRank = tRanks[tCurr.nRank].strName
-      strRank = FixXMLString(strRank)
+
+function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
+	Print(timeLastExported)
+  local currTime = self:getCurrTime()
+	Print(currTime)
+ 
+  if (currTime-timeLastExported) > 3600 then
+    local date = os.date("%m/%d/%y")
+    local time = os.date("%H:%M")
+	local realmName = GameLib.GetRealmName()
+    local tGuild = self:GetGuild()
+    local guildName = tGuild:GetName()
+    local tRanks = guildCurr:GetRanks()
+    local strPlayerDataRow = ""
+    local JScanBot = Apollo.GetAddon("JScanBot")
+    local strPath = "c:\\WildStarRosters\\".. realmName .. " " .. guildName .. " Roster.csv"
+    local timeStamp = (time .. " " .. date) 
+	local strTimeExported = (timeStamp .."\n")
+	JScanBot:OpenFile(strPath)
+	local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
+	JScanBot:WriteToFile(strPath,strTimeExported)
+	JScanBot:CloseFile(strPath)
+	JScanBot:OpenFile(strPath,true)
+    JScanBot:WriteToFile(strPath,headers)
+
+    for key, tCurr in pairs(tGuildRoster) do
+  	   if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
+    	  strRank = tRanks[tCurr.nRank].strName
+    	  strRank = FixXMLString(strRank)	
+       end
+	
+    	--map tRoster values
+		local strRealm = realmName
+    	local strNote = tCurr.strNote
+      	local strName = tCurr.strName
+    	local strClass = tCurr.strClass
+    	local strPlayerPath = self:HelperConvertPathToString(tCurr.ePathType)
+    	local strLastOnline = self:HelperConvertToTime(tCurr.fLastOnline)
+     	local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	JScanBot:WriteToFile(strPath, strPlayerDataRow)
     end
-    s = (guildName .. "," .. tCurr.strNote .. "," .. tCurr.strName .. "," .. strRank .. "," .. tCurr.strClass .. "," .. self:HelperConvertPathToString(tCurr.ePathType) .. "," .. self:HelperConvertToTime(tCurr.fLastOnline) .. "\n")
-   	JScanBot:WriteToFile(strPath, s)
-  end
-  JScanBot:CloseFile(strPath)
-nd
+  	JScanBot:CloseFile(strPath)
+	timeLastExported = self:getCurrTime()  --9:59pm
+  else
+	Print("Last export was completed less than an hour ago, and will not be completed at this time.")
+	end
+  
+end
 
 function GuildRosterTools:ExportData()
   local tGuild = self:GetGuild()
@@ -138,6 +190,7 @@ function GuildRosterTools:GetGuild()
   end
   return tGuild
 end
+
 
 
 
@@ -161,6 +214,9 @@ end
 ---------------------------------
 --Helper Functions
 ---------------------------------
+function GuildRosterTools:getCurrTime()
+  return os.time()
+end
 
 function GuildRosterTools:HelperConvertPathToString(ePath)
   local strResult = ""
