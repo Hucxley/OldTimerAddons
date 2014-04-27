@@ -2,4 +2,5 @@
 <Addon Author="OTG Addon Crew" APIVersion="7" Name="GuildRosterTools" Description="">
     <Script Name="GuildRosterTools.lua"/>
     <Form Name="GuildRosterTools.xml"/>
+    <Script Name="Libs\GeminiIO-1.0.lua"/>
 </Addon>
