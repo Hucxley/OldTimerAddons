@@ -6,8 +6,8 @@
 require "Window"
 require "GuildLib"
 require "Apollo"
-require "GuildTypeLib"
 require "GameLib"
+require "GeminiIO-1.0"
  
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools Module Definition
