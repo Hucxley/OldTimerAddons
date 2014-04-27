@@ -7,13 +7,13 @@ require "Window"
 require "GuildLib"
 require "Apollo"
 require "GameLib"
-require "GeminiIO-1.0"
+
  
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools Module Definition
 -----------------------------------------------------------------------------------------------
 local GuildRosterTools = {}
-local IO
+local Lib
  
 -----------------------------------------------------------------------------------------------
 -- Constants
@@ -68,8 +68,8 @@ end
 function GuildRosterTools:OnLoad()
     -- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("GuildRosterTools.xml")
-	-- load IO package 
-	IO = Apollo.GetPackage("GeminiIO-1.0").tPackage
+	-- load Lib package 
+	Lib = Apollo.GetPackage("GeminiIO-1.0").tPackage
 	
 	
 end
@@ -114,7 +114,7 @@ function GuildRosterTools:GetAsyncLoadStatus()
 		bExportDelayOverride = false
 		-- register our Addon so others can wait for it if they want
 		g_AddonsLoaded["GuildRosterTools"] = true
-		
+		Print("GuildRosterTools loaded.  Use /guildtools to open the Roster Export Window")
 		return Apollo.AddonLoadStatus.Loaded
 	end
 	return Apollo.AddonLoadStatus.Loading 
@@ -145,17 +145,17 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
     local guildName = tGuild:GetName()
     local tRanks = guildCurr:GetRanks()
     local strPlayerDataRow = ""
-    local IO = Apollo.GetAddon("GeminiIO-1.0")
+    --local Lib = Apollo.GetAddon("GeminiIO-1.0")
     local strPath = "c:\\WildStarRosters\\".. realmName .. " " .. guildName .. " Roster.csv"
-	IO:BuildFileStreamWriter(strPath)
+	Lib:BuildFileStreamWriter(strPath)
     local timeStamp = (time .. " " .. date) 
 	local strTimeExported = (timeStamp .."\n")
-	IO:OpenFile(strPath)
+	Lib:OpenFile(strPath)
 	local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
-	IO:WriteToFile(strPath,strTimeExported)
-	IO:CloseFile(strPath)
-	IO:OpenFile(strPath,true)
-    IO:WriteToFile(strPath,headers)
+	Lib:WriteToFile(strPath,strTimeExported)
+	Lib:CloseFile(strPath)
+	Lib:OpenFile(strPath,true)
+    Lib:WriteToFile(strPath,headers)
 
     for key, tCurr in pairs(tGuildRoster) do
   	   if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
@@ -170,9 +170,9 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
     	local strClass = tCurr.strClass
     	local strPlayerPath = self:HelperConvertPathToString(tCurr.ePathType)
     	local strLastOnline = self:HelperConvertToTime(tCurr.fLastOnline)
-     	local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	IO:WriteToFile(strPath, strPlayerDataRow)
+     	local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	Lib:WriteToFile(strPath, strPlayerDataRow)
     end
-  	IO:CloseFile(strPath)
+  	Lib:CloseFile(strPath)
 	timeLastExported = self:getCurrTime()  --9:59pm
   else
 	Print("Last export was completed less than an hour ago, and will not be completed at this time.")
