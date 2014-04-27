@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<Addon Author="OTG Addon Crew" APIVersion="7" Name="GuildRosterTools" Description="">
-    <Script Name="GuildRosterTools.lua"/>
-    <Form Name="GuildRosterTools.xml"/>
+<Addon Author="OTG Addon Crew" APIVersion="7" Name="GuildRosterTools" Description="Use /guildtools to open export window">
+	<Script Name="Libs\Queue-1.2.lua"/>
+    	<Script Name="Libs\XmlDocument-1.0.lua"/>
+	<Script Name="Libs\GeminiIO-1.0.lua"/>
+    	<Script Name="Libs\inspect-1.2.lua"/>
+    	<Script Name="Libs\GeminiLogging-1.2.lua"/>
+    	<Script Name="GuildRosterTools.lua"/>
+    	<Form Name="GuildRosterTools.xml"/>
 </Addon>

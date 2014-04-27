@@ -6,13 +6,14 @@
 require "Window"
 require "GuildLib"
 require "Apollo"
-require "GuildTypeLib"
 require "GameLib"
+
  
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools Module Definition
 -----------------------------------------------------------------------------------------------
-local GuildRosterTools = {} 
+local GuildRosterTools = {}
+local Lib
  
 -----------------------------------------------------------------------------------------------
 -- Constants
@@ -34,7 +35,7 @@ function GuildRosterTools:new(o)
 end
 
 function GuildRosterTools:Init()
-    Apollo.RegisterAddon(self)
+    Apollo.RegisterAddon(self, false, "", {"GeminiIO-1.0"})
 end
 
 function GuildRosterTools:OnSave(eLevel)
@@ -67,6 +68,9 @@ end
 function GuildRosterTools:OnLoad()
     -- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("GuildRosterTools.xml")
+	-- load Lib package 
+	Lib = Apollo.GetPackage("GeminiIO-1.0").tPackage
+	
 	
 end
 
@@ -107,9 +111,10 @@ function GuildRosterTools:GetAsyncLoadStatus()
 		  timeLastExported = 0
 		else timeLastExported = self.timeLastExported
 		end
+		bExportDelayOverride = false
 		-- register our Addon so others can wait for it if they want
 		g_AddonsLoaded["GuildRosterTools"] = true
-		
+		Print("GuildRosterTools loaded.  Use /guildtools to open the Roster Export Window")
 		return Apollo.AddonLoadStatus.Loaded
 	end
 	return Apollo.AddonLoadStatus.Loading 
@@ -128,11 +133,11 @@ end
 
 
 function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
-	Print(timeLastExported)
+	--Print(timeLastExported)
   local currTime = self:getCurrTime()
-	Print(currTime)
- 
-  if (currTime-timeLastExported) > 3600 then
+	--Print(currTime)
+	
+  if (currTime-timeLastExported) > 3600 or bExportDelayOverride == true then	
     local date = os.date("%m/%d/%y")
     local time = os.date("%H:%M")
 	local realmName = GameLib.GetRealmName()
@@ -140,16 +145,17 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
     local guildName = tGuild:GetName()
     local tRanks = guildCurr:GetRanks()
     local strPlayerDataRow = ""
-    local JScanBot = Apollo.GetAddon("JScanBot")
+    --local Lib = Apollo.GetAddon("GeminiIO-1.0")
     local strPath = "c:\\WildStarRosters\\".. realmName .. " " .. guildName .. " Roster.csv"
+	Lib:BuildFileStreamWriter(strPath)
     local timeStamp = (time .. " " .. date) 
 	local strTimeExported = (timeStamp .."\n")
-	JScanBot:OpenFile(strPath)
+	Lib:OpenFile(strPath)
 	local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
-	JScanBot:WriteToFile(strPath,strTimeExported)
-	JScanBot:CloseFile(strPath)
-	JScanBot:OpenFile(strPath,true)
-    JScanBot:WriteToFile(strPath,headers)
+	Lib:WriteToFile(strPath,strTimeExported)
+	Lib:CloseFile(strPath)
+	Lib:OpenFile(strPath,true)
+    Lib:WriteToFile(strPath,headers)
 
     for key, tCurr in pairs(tGuildRoster) do
   	   if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
@@ -164,9 +170,9 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
     	local strClass = tCurr.strClass
     	local strPlayerPath = self:HelperConvertPathToString(tCurr.ePathType)
     	local strLastOnline = self:HelperConvertToTime(tCurr.fLastOnline)
-     	local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	JScanBot:WriteToFile(strPath, strPlayerDataRow)
+     	local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	Lib:WriteToFile(strPath, strPlayerDataRow)
     end
-  	JScanBot:CloseFile(strPath)
+  	Lib:CloseFile(strPath)
 	timeLastExported = self:getCurrTime()  --9:59pm
   else
 	Print("Last export was completed less than an hour ago, and will not be completed at this time.")
@@ -175,10 +181,11 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 end
 
 function GuildRosterTools:ExportData()
-  local tGuild = self:GetGuild()
-    if tGuild then
-     tGuild:RequestMembers()
+	local tGuild = self:GetGuild()
+    	if tGuild then
+    tGuild:RequestMembers()
     end
+	local bExportDelayOverride = true
 end
 
 function GuildRosterTools:GetGuild()
