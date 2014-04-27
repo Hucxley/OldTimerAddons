@@ -127,26 +127,22 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 	local currTime = self:getCurrTime()
 	--Print(currTime)
 	
-	if (currTime-timeLastExported) > 3600 or bExportDelayOverride == true then	
+	if (currTime-timeLastExported) > 3600 then 
+		Print(timeLastExported)	
 		local date = os.date("%m/%d/%y")
 		local time = os.date("%H:%M")
-	local realmName = GameLib.GetRealmName()
+		local realmName = GameLib.GetRealmName()
 		local tGuild = self:GetGuild()
 		local guildName = tGuild:GetName()
 		local tRanks = guildCurr:GetRanks()
 		local strPlayerDataRow = ""
-		--local IO = Apollo.GetAddon("GeminiIO-1.0")
 		local strPath = "c:\\WildStarRosters\\".. realmName .. " " .. guildName .. " Roster.csv"
-		IO = Lib:OpenFile([[strPath]])
-	IO:BuildFileStreamWriter(strPath)
+		IO = Lib:OpenFile(strPath)
 		local timeStamp = (time .. " " .. date) 
-	local strTimeExported = (timeStamp .."\n")
-	IO:OpenFile(strPath)
-	local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
-	IO:WriteToFile(strPath,strTimeExported)
-	IO:CloseFile(strPath)
-	IO:OpenFile(strPath,true)
-		IO:WriteToFile(strPath,headers)
+		local strTimeExported = (timeStamp .."\n")
+		local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
+		IO:Write(strTimeExported)
+		IO:Write(headers)
 
 		for key, tCurr in pairs(tGuildRoster) do
 			 if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
@@ -155,15 +151,17 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 			 end
 	
 			--map tRoster values
-		local strRealm = realmName
+			local strRealm = realmName
 			local strNote = tCurr.strNote
-				local strName = tCurr.strName
+			local strName = tCurr.strName
 			local strClass = tCurr.strClass
 			local strPlayerPath = self:HelperConvertPathToString(tCurr.ePathType)
 			local strLastOnline = self:HelperConvertToTime(tCurr.fLastOnline)
-			local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	IO:WriteToFile(strPath, strPlayerDataRow)
+			local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	
+			IO:Write(strPlayerDataRow)
+			--self.wndMain:FindChild("DisplayFrame"):setText(strPlayerDataRow)
 		end
-		IO:CloseFile(strPath)
+		--IO:Close()
 	timeLastExported = self:getCurrTime()  --9:59pm
 	else
 	Print("Last export was completed less than an hour ago, and will not be completed at this time.")
@@ -172,11 +170,13 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 end
 
 function GuildRosterTools:ExportData()
+	timeLastExported = 0
+	Print(timeLastExported)
 	local tGuild = self:GetGuild()
 			if tGuild then
 		tGuild:RequestMembers()
 		end
-	local bExportDelayOverride = true
+	timeLastExported = 0
 end
 
 function GuildRosterTools:GetGuild()
