@@ -164,7 +164,7 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 		--IO:Close()
 	timeLastExported = self:getCurrTime()  --9:59pm
 	else
-	Print("Last export was completed less than an hour ago, and will not be completed at this time.")
+	--Print("Last export was completed less than an hour ago, and will not be completed at this time.")
 	end
 	
 end
