@@ -3,4 +3,6 @@
     <Script Name="GuildRosterTools.lua"/>
     <Form Name="GuildRosterTools.xml"/>
     <Script Name="Libs\GeminiIO-1.0.lua"/>
+    <Script Name="Libs\XMLDocument.lua"/>
+    <Script Name="Libs\Queue.lua"/>
 </Addon>
