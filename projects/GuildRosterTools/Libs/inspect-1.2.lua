@@ -294,3 +294,4 @@ end
 
 setmetatable(inspect, { __call = function(_, ...) return inspect.inspect(...) end })
 
+Apollo.RegisterPackage(inspect, "Drafto:Lib:inspect-1.2", 1, {})
