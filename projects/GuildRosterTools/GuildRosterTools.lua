@@ -7,13 +7,12 @@ require "Window"
 require "GuildLib"
 require "Apollo"
 require "GameLib"
-
+require "ChatSystemLib"
  
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools Module Definition
 -----------------------------------------------------------------------------------------------
 local GuildRosterTools = {}
-local Lib
  
 -----------------------------------------------------------------------------------------------
 -- Constants
@@ -30,7 +29,7 @@ function GuildRosterTools:new(o)
 
 		-- initialize variables here
 	self.troster = nil
-	self.timeLastExported = nil
+	self.TimeLastExported = nil
 		return o
 end
 
@@ -38,30 +37,64 @@ function GuildRosterTools:Init()
 	local bHasConfigureFunction = false
 	local strConfigureButtonText = ""
 	local tDependencies = {
-		"Gemini:IO-1.0",
-		"Gemini:Logging-1.2",
+	
 	}
 	Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
 end
 
 function GuildRosterTools:OnSave(eLevel)
 	-- We save at a character level in case of alts in different guilds
-		if (eLevel ~= GameLib.CodeEnumAddonSaveLevel.Character) then
+	if (eLevel ~= GameLib.CodeEnumAddonSaveLevel.Character) then
 		return
 	end
 
 	tSave = {}
+	self.TimeLastExported = TimeLastExported
 	
-	self.timeLastExported = timeLastExported
-	tSave = {nTimeLastExported = self.timeLastExported}	
+	
+	local nTimeLastExported = self.TimeLastExported
+	local tHeaders = {strHeaders}
+	local strGuild = strGuildName
+	local tRosterData = tDataExport
+	local strPlayerName = strPlayerName
+	
+	--local tSavedExportValues = {nTimeLastExported,strGuild,tHeaders,tRosterData}
+	tSave["nTimeLastExported"] = nTimeLastExported
+	tSave["strGuild"] = strGuild
+	tSave["tHeaders"] = tHeaders
+	tSave["tRosterData"] = tRosterData
+	tSave["strPlayerName"] = strPlayerName
+	
+	--local tSave = tSavedExportValues
+
 	return tSave
 end
 
 function GuildRosterTools:OnRestore(eLevel,tSavedData)
 	if tSavedData.nTimeLastExported ~= nil then
-		self.timeLastExported = tSavedData.nTimeLastExported
+		self.TimeLastExported = tSavedData.nTimeLastExported
 	else
-		self.timeLastExported = 0
+		self.TimeLastExported = 0
+	end
+	if tSavedData.strGuild ~= nil then
+		self.strGuild = tSavedData.strGuild
+	else
+		self.strGuild = ""
+	end
+	if tSavedData.tHeaders ~= nil then
+		self.tHeaders = tSavedData.tHeaders
+	else
+		self.tHeaders = {}
+	end
+	if tSavedData.tRosterData ~= nil then
+		self.tRosterData = tSavedData.tRosterData
+	else
+		self.tRosterData = {}
+	end
+	if tSavedData.strPlayerName ~= nil then 
+		self.strPlayerName = tSavedData.strPlayerName
+	else
+		self.strPlayerName = ""
 	end
 end  
 
@@ -72,9 +105,8 @@ function GuildRosterTools:OnLoad()
 		-- load our form file
 	self.xmlDoc = XmlDoc.CreateFromFile("GuildRosterTools.xml")
 	self.xmlDoc:RegisterCallback("OnDocLoaded", self)
-	-- load IO package 
-	Lib = Apollo.GetPackage("Gemini:IO-1.0").tPackage
-end
+	
+	end
 
 -----------------------------------------------------------------------------------------------
 -- GuildRosterTools OnDocLoaded
@@ -95,18 +127,40 @@ function GuildRosterTools:OnDocLoaded()
 		
 		-- Register handlers for events, slash commands and timer, etc.
 		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
-		Apollo.RegisterSlashCommand("guildtools", "OnGuildRosterToolsOn", self)
+		Apollo.RegisterSlashCommand("grt", "OnGuildRosterToolsOn", self)
 		Apollo.RegisterEventHandler("GuildRoster", "OnGuildRoster", self)
+		Apollo.RegisterSlashCommand("grtResetTime", "ResetTime",self)
 
 		-- Do additional Addon initialization here
-		if self.timeLastExported == nil then
-			timeLastExported = 0
+		if self.TimeLastExported == nil then
+			TimeLastExported = 0
 		else
-			timeLastExported = self.timeLastExported
+			TimeLastExported = self.TimeLastExported
 		end
+		if self.strGuild == nil then
+			strGuildName = ""
+		else
+			strGuildName = self.strGuild
+		end
+		if self.tHeaders == nil then
+			strHeaders = ""
+		else
+			strHeaders = table.concat(self.tHeaders,",")
+		end
+		if self.tRosterData == nil then
+			tDataExport = {}
+		else
+			tDataExport = self.tRosterData
+		end
+		if self.strPlayerName == nil then
+			strPlayerName = ""
+		else
+			strPlayerName = self.strPlayerName
+		end
+				
 		bExportDelayOverride = false
 
-		Print("GuildRosterTools loaded.  Use /guildtools to open the Roster Export Window")
+		ChatSystemLib.PostOnChannel(2,"GuildRosterTools: GuildRosterTools loaded. \nUse /grt to open the Roster Export Window.  \nUse /grtResetTime to reset last export time.")
 	end
 end
 
@@ -123,26 +177,26 @@ end
 
 
 function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
-	--Print(timeLastExported)
-	local currTime = self:getCurrTime()
-	--Print(currTime)
 	
-	if (currTime-timeLastExported) > 3600 then 
-		Print(timeLastExported)	
-		local date = os.date("%m/%d/%y")
-		local time = os.date("%H:%M")
-		local realmName = GameLib.GetRealmName()
+	local currTime = self:GetCurrTime()
+	
+	
+	if (currTime - TimeLastExported) > 900 or bExportDelayOverride == true then 
+		--Export Guild Roster
+		tDataExport = {}
+		local nDate= os.date("%m/%d/%y")
+		local nTime= os.date("%H:%M")
+		local strRealmName = GameLib.GetRealmName()
 		local tGuild = self:GetGuild()
-		local guildName = tGuild:GetName()
+		strPlayerName = GameLib.GetPlayerUnit():GetName()
+		strGuildName = tGuild:GetName()
 		local tRanks = guildCurr:GetRanks()
 		local strPlayerDataRow = ""
-		local strPath = "c:\\WildStarRosters\\".. realmName .. " " .. guildName .. " Roster.csv"
-		IO = Lib:OpenFile(strPath)
-		local timeStamp = (time .. " " .. date) 
-		local strTimeExported = (timeStamp .."\n")
-		local headers = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online".."\n")
-		IO:Write(strTimeExported)
-		IO:Write(headers)
+		local strPath = "Wildstar Addon Save Data for "..strPlayerName
+		local timeStamp = (nTime.. " " ..nDate) 
+		strTimeExported = timeStamp
+		strHeaders = ("Server"..",".."Guild"..",".."Forum Name"..",".."Player Name"..",".."Level"..",".."Rank"..",".."Class"..",".."Path"..",".."Last Online"..",".."Days Offline")
+	
 
 		for key, tCurr in pairs(tGuildRoster) do
 			 if tRanks[tCurr.nRank] and tRanks[tCurr.nRank].strName then
@@ -151,32 +205,40 @@ function GuildRosterTools:OnGuildRoster(guildCurr, tGuildRoster)
 			 end
 	
 			--map tRoster values
-			local strRealm = realmName
+			local strRealm = strRealmName
 			local strNote = tCurr.strNote
 			local strName = tCurr.strName
+			local nLevel = tCurr.nLevel
 			local strClass = tCurr.strClass
 			local strPlayerPath = self:HelperConvertPathToString(tCurr.ePathType)
 			local strLastOnline = self:HelperConvertToTime(tCurr.fLastOnline)
-			local strPlayerDataRow = (strRealm .. "," .. guildName .. "," .. strNote .. "," .. strName .. "," .. strRank .. "," .. strClass .. "," .. strPlayerPath .. "," .. strLastOnline .. "\n")     	
-			IO:Write(strPlayerDataRow)
-			--self.wndMain:FindChild("DisplayFrame"):setText(strPlayerDataRow)
+			local nRawLastOnline = tCurr.fLastOnline
+			strPlayerDataRow = (strRealm .. ", " .. strGuildName.. ", " .. strNote .. ", " .. strName .. ", " .. nLevel .. ", " .. strRank .. ", " .. strClass .. ", " .. strPlayerPath .. ", " .. strLastOnline .. ", " .. nRawLastOnline)     	
+			table.insert(tDataExport,strPlayerDataRow)
+			self.wndMain:FindChild("DisplayFrame"):SetText("Exporting:"..strName)
 		end
-		--IO:Close()
-	timeLastExported = self:getCurrTime()  --9:59pm
+		
+	TimeLastExported = self:GetCurrTime()
+	--Print(TimeLastExported)
+	self.wndMain:FindChild("DisplayFrame"):SetText("Last Export processed to: "..strPath.."! (Export time/date: "..timeStamp..")")
+	bExportDelayOverride = false
 	else
-	--Print("Last export was completed less than an hour ago, and will not be completed at this time.")
+	tDataExport = tDataExport
+	strGuildName = strGuildName
+	TimeLastExported = TimeLastExported
+	strHeaders = strHeaders
+	strPlayerName = strPlayerName
 	end
 	
 end
 
 function GuildRosterTools:ExportData()
-	timeLastExported = 0
-	Print(timeLastExported)
+	bExportDelayOverride = true
+	Print("Export Guild Roster manual override processing.")
 	local tGuild = self:GetGuild()
-			if tGuild then
-		tGuild:RequestMembers()
+		if tGuild then
+			tGuild:RequestMembers()
 		end
-	timeLastExported = 0
 end
 
 function GuildRosterTools:GetGuild()
@@ -189,6 +251,10 @@ function GuildRosterTools:GetGuild()
 	return tGuild
 end
 
+function GuildRosterTools:ResetTime()
+	TimeLastExported = 0
+	Print("Last Export time reset.  Guild Roster will auto-update")
+end
 
 
 
@@ -212,7 +278,7 @@ end
 ---------------------------------
 --Helper Functions
 ---------------------------------
-function GuildRosterTools:getCurrTime()
+function GuildRosterTools:GetCurrTime()
 	return os.time()
 end
 
