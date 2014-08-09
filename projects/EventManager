@@ -262,6 +262,7 @@ end
 
 function EventManager:OnEventManagerMessage(channel, tMsg)
 	if tMsg.tMetaData.Passphrase ~= self.tMetaData.Passphrase then
+		Print("Passphrase mismatch. You are not authorized to received messages on this channel.")
 		return
 	end
 	channel = channel
