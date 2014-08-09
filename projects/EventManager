@@ -1,0 +1,537 @@
+-----------------------------------------------------------------------------------------------
+-- Client Lua Script for EventManager
+-- Copyright (c) NCsoft. All rights reserved
+-----------------------------------------------------------------------------------------------
+ 
+require "Window"
+require "ICCommLib"
+ 
+-----------------------------------------------------------------------------------------------
+-- EventManager Module Definition
+-----------------------------------------------------------------------------------------------
+local EventManager = {}   --need to remove closing bracket if merging 
+local tEvents = {}
+local tMetaData = {nLatestUpdate = "" ,SyncChannel = "" ,Passphrase = ""}
+local TankRoleStatus = 0	
+local HealerRoleStatus = 0
+local DPSRoleStatus = 0
+local MetaData = ""
+ 
+ 
+-----------------------------------------------------------------------------------------------
+-- Constants
+-----------------------------------------------------------------------------------------------
+-- e.g. local kiExampleVariableMax = 999
+local kcrSelectedText = ApolloColor.new("UI_BtnTextHoloPressedFlyby")
+local kcrNormalText = ApolloColor.new("UI_BtnTextHoloNormal")
+
+local function SortEventsByDate(a,b)
+	return a.nEventSortValue < b.nEventSortValue
+end 
+-----------------------------------------------------------------------------------------------
+-- Initialization
+-----------------------------------------------------------------------------------------------
+function EventManager:new(o)
+    o = o or {}
+    setmetatable(o, self)
+    self.__index = self 
+
+    -- initialize variables here
+	o.tItems = {} -- keep track of all the list items
+	o.wndSelectedListItem = nil -- keep track of which list item is currently selected
+
+    return o
+end
+
+function EventManager:Init()
+	local bHasConfigureFunction = false
+	local strConfigureButtonText = ""
+	local tDependencies = {
+		-- "UnitOrPackageName",
+	}
+    Apollo.RegisterAddon(self, bHasConfigureFunction, strConfigureButtonText, tDependencies)
+end
+
+function EventManager:OnSave(eLevel)
+ if (eLevel ~= GameLib.CodeEnumAddonSaveLevel.Character) then
+		return
+	end
+	local tEvents = self.tEvents
+	local tMetaData = self.tMetaData
+	
+	tSave = { }
+	
+	tSave = {tMetaData = tMetaData, Events = tEvents}
+	return tSave
+	
+end
+
+function EventManager:OnRestore(eLevel,tSavedData)
+	if tSavedData then
+		tMetaData = tSavedData.tMetaData
+		tEvents = tSavedData.Events
+	end
+end	
+
+
+-----------------------------------------------------------------------------------------------
+-- EventManager OnLoad
+-----------------------------------------------------------------------------------------------
+function EventManager:OnLoad()
+    -- load our form file
+	self.xmlDoc = XmlDoc.CreateFromFile("EventManager.xml")
+	self.xmlDoc:RegisterCallback("OnDocLoaded", self)
+end
+
+-----------------------------------------------------------------------------------------------
+-- EventManager OnDocLoaded
+-----------------------------------------------------------------------------------------------
+function EventManager:OnDocLoaded()
+
+	if self.xmlDoc ~= nil and self.xmlDoc:IsLoaded() then
+	    self.wndMain = Apollo.LoadForm(self.xmlDoc, "EventManagerForm", nil, self)
+		if self.wndMain == nil then
+			Apollo.AddAddonErrorText(self, "Could not load the main window for some reason.")
+			return
+		end
+		
+		-- item list
+		self.wndItemList = self.wndMain:FindChild("ItemList")
+	    self.wndMain:Show(false, true)
+		-- New event form
+		self.wndNewEvent = Apollo.LoadForm(self.xmlDoc,"NewEventForm",wndMain,self)
+		self.wndNewEvent:Show(false)
+		
+		-- Event Signup Form
+		self.wndSignUp = Apollo.LoadForm(self.xmlDoc,"SignUpForm",wndMain,self)
+		self.wndSignUp:Show(false)
+		
+		-- Options Form
+		self.wndOptions = Apollo.LoadForm(self.xmlDoc,"OptionsForm",wndMain,self)
+		self.wndOptions:Show(false)
+
+		-- if the xmlDoc is no longer needed, you should set it to nil
+		-- self.xmlDoc = nil
+		
+		-- Register handlers for events, slash commands and timer, etc.
+		-- e.g. Apollo.RegisterEventHandler("KeyDown", "OnKeyDown", self)
+		Apollo.RegisterSlashCommand("events",							"OnEventManagerOn",self)
+		--Apollo.RegisterSlashCommand("events", 							"OnEventManagerOn", self)
+		Apollo.RegisterEventHandler("WindowManagementReady", 			"OnWindowManagementReady", self)
+		Apollo.RegisterEventHandler("WindowMove",						"OnWindowMove", self)
+		
+
+
+		-- Do additional Addon initialization here
+		if tMetaData ~= nil then
+			self.tMetaData = tMetaData
+			self.tMetaData.nLatestUpdate = self.tMetaData.nLatestUpdate
+		else
+			self.tMetaData = {}
+			self.tMetaData.nLatestUpdate = 0
+		end
+		if tEvents ~= nil then
+			self.tEvents = tEvents
+		else self.tEvents = {}
+		end
+	end
+end
+
+
+
+-----------------------------------------------------------------------------------------------
+-- EventManager Functions
+-----------------------------------------------------------------------------------------------
+-- Define general functions here
+
+-- on SlashCommand "/em"
+function EventManager:OnEventManagerOn()
+	self.wndMain:Invoke() -- show the window
+	for idx, event in pairs(self.tEvents) do
+		if self.tEvents[idx].nEventSortValue < tonumber(os.time())+3600 then
+			table.remove(self.tEvents,idx)
+		end
+	end
+	-- sort event entries
+	table.sort(self.tEvents,SortEventsByDate)
+
+		-- populate the item list
+	self:PopulateItemList(self.tEvents)
+end
+
+function EventManager:OnTankRoleChecked(wndHandler, wndControl, eMouseButton)
+	self.TankRoleStatus= 1
+end
+
+function EventManager:OnTankRoleUnChecked(wndHandler, wndControl, eMouseButton)
+	self.TankRoleStatus= 0
+end
+
+function EventManager:OnHealerRoleChecked(wndHandler, wndControl, eMouseButton)
+	self.HealerRoleStatus = 1
+end
+
+function EventManager:OnHealerRoleUnChecked(wndHandler, wndControl, eMouseButton)
+	self.HealerRoleStatus = 0
+end
+
+function EventManager:OnDPSRoleChecked(wndHandler, wndControl, eMouseButton)
+	self.DPSRoleStatus = 1
+end
+
+function EventManager:OnDPSRoleUnChecked(wndHandler, wndControl, eMouseButton)
+	self.CreatorDPSRoleStatus = 0
+end
+
+function EventManager:CreateSortValue(tEventDetail)
+	local Year = tEventDetail.Year
+	local Month = tEventDetail.Month
+	local Day = tEventDetail.Day
+	local Hour = tEventDetail.Hour
+	Minute = tEventDetail.Minute
+	local AmPm = tEventDetail.AmPm
+	if AmPm == "pm" then
+		if Hour == 12 then 
+		else Hour = Hour + 12
+		end
+	else
+		if Hour == 12 then
+			Hour = 0
+		end
+	end
+	nOSDate = tonumber(os.date(os.time{year = Year, month = Month, day = Day, hour = Hour, min = Minute,}))
+	return nOSDate
+end
+
+function EventManager:get_timezone_offset(ts)
+	local utcdate   = os.date("!*t", ts)
+	local localdate = os.date("*t", ts)
+	localdate.isdst = false -- this is the trick
+	return tonumber(os.difftime(os.time(utcdate),os.time(localdate)))
+end
+
+function EventManager:TableLength(T)
+	local count = 0
+	for idx, name in pairs(T) do 
+		if T[idx].Name ~= "" then 
+			count = count + 1 
+		end
+	end
+  return count
+end
+
+function EventManager:RoleCount(T,nTankCount,nHealerCount,nDPSCount)
+	local nTankCount = 0
+	local nHealerCount = 0
+	local nDPSCount = 0
+	for idx, role in pairs(T) do 
+		if T[idx].Roles.Tank == 1 then 
+			nTankCount = nTankCount +1
+		end
+		if T[idx].Roles.Healer == 1 then
+			nHealerCount = nHealerCount + 1
+		end
+		if T[idx].Roles.DPS == 1 then
+			nDPSCount = nDPSCount + 1
+		end
+	end
+  return nTankCount, nHealerCount, nDPSCount
+end
+
+function EventManager:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS)
+	local Tank = bCreatorTank
+	local Healer = bCreatorTank
+	local DPS = bCreatorTank
+	return {Tank = self.TankRoleStatus, Healer = self.HealerRoleStatus, DPS = self.DPSRoleStatus}
+end
+
+function EventManager:CreateAttendeeInfo(Creator,time,Roles)
+	local Roles = Roles
+	local Creator = Creator
+	local time = time
+	if not Roles.Tank and Roles.Healer and Roles.DPS then
+		tCurrentAttendees = {{Name = "", nSignUpTime = "", Roles = {},}}
+	else
+		tCurrentAttendees = {{Name = Creator,nSignUpTime = time,
+							Roles = Roles}}		
+	end
+	return tCurrentAttendees
+end	
+
+function EventManager:OnEventManagerMessage(channel, tMsg)
+	if not tMsg.MetaData.Passphrase or tMsg.MetaData.Passphrase ~= self.tMetaData.Passphrase then
+		return
+	end
+	
+    if tMsg.MetaData.nLatestUpdate < self.tMetaData.nLatestUpdate then
+        self.EventsChan:SendMessage({self.tMetaData,self.tEvents})
+	else
+		self.tMetaData = tMsg.MetaData
+		self.tEvents = tMsg.tEvents
+		Print("New Events received on sync channel "..channel)
+    end
+
+	self:PopulateItemList(self.tEvents)
+
+
+end
+
+function EventManager:EventsMessenger( )
+	self.tMetaData = self.tMetaData
+   	local tEvents = self.tEvents
+    
+
+    -- prepare our message to send to other Dotter users
+    local t = {}
+    t.MetaData = self.tMetaData
+    t.tEvents = tEvents
+    
+    -- send the message to other users
+    self.EventsChan:SendMessage(t)
+	Print("Events update sent to sync'd users.")
+    -- here we "send" the message to ourselves by calling OnDotMessage directly
+    self:OnEventManagerMessage(nil, t)
+end
+
+-----------------------------------------------------------------------------------------------
+-- EventManagerForm Functions
+-----------------------------------------------------------------------------------------------
+-- when the OK button is clicked
+function EventManager:OnOK()
+	self.wndMain:Close() -- hide the window
+end
+
+-- when the Cancel button is clicked
+function EventManager:OnCancel(wndHandler, wndControl, eMouseButton)
+	wndControl:GetParent():Close() -- hide the window
+end
+
+
+function EventManager:OnNewEventOn( wndHandler, wndControl, eMouseButton )
+	self.wndNewEvent:Show(true)
+end
+
+function EventManager:OnOptionsWindowShow (wndHandler, wndControl, eMouseButton)
+	if self.tMetaData.SyncChannel ~= nil or self.tMetaData.Passphrase ~= nil then
+		self.wndOptions:FindChild("SyncChannelBox"):SetText(self.tMetaData.SyncChannel)
+		self.wndOptions:FindChild("PassphraseBox"):SetText(self.tMetaData.Passphrase)
+	end
+	self.wndOptions:Show(true)
+end
+
+function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)
+	self.wndOptions = wndControl:GetParent()
+	local SyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
+	self.tMetaData.SyncChannel = SyncChannel
+	self.tMetaData.SyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
+	self.tMetaData.Passphrase = self.wndOptions:FindChild("PassphraseBox"):GetText()
+	self.EventsChan = ICCommLib.JoinChannel(self.tMetaData.SyncChannel, "OnEventManagerMessage", self)
+	wndControl:GetParent():Show(false)
+	
+end
+
+function EventManager:OnSignUpForm (wndHandler, wndControl, eMouseButton)
+	self.wndSignUp:Show(true)
+	local wndSelectedEvent = wndControl
+	local SelectedEvent = wndSelectedEvent:GetParent():GetData()
+	self:OnSignUpFormShow(SelectedEvent)
+end
+
+local function OnWindowMove() 
+	self.wndNewEvent:SetAnchorOffsets(self.wndMain:GetAnchorOffsets())
+	self.wndSignUp:SetAnchorOffsets(self.wndMain:GetAnchorOffsets()) 
+end
+
+function EventManager:OnSignUpFormShow (SelectedEvent)
+	self.wndSignUp:FindChild("TankRoleButton"):SetCheck(false)
+	self.wndSignUp:FindChild("HealerRoleButton"):SetCheck(false)
+	self.wndSignUp:FindChild("DPSRoleButton"):SetCheck(false)
+	local EventId = SelectedEvent.EventId
+	local EventName = SelectedEvent.Detail.EventName
+	local EventDescription = SelectedEvent.Detail.Description
+	local EventSignUpHeader = EventName.."\n"..string.format("%02d",SelectedEvent.Detail.Month).."/"..string.format("%02d",SelectedEvent.Detail.Day)..
+							"/"..SelectedEvent.Detail.Year..", "..string.format("%02d",SelectedEvent.Detail.Hour)..":"..
+							string.format("%02d",SelectedEvent.Detail.Minute).." "..SelectedEvent.Detail.AmPm
+	self.wndSignUp:FindChild("SignUpFormHeader"):SetText(EventSignUpHeader)
+	self.wndSignUp:FindChild("SignUpDescriptionBox"):SetText(EventDescription)
+	self.wndSignUp:SetData(SelectedEvent)
+end
+
+function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
+	local SelectedEvent = wndControl:GetParent():GetData()
+	local EventId = SelectedEvent.EventId
+	local EventName = SelectedEvent.Detail.EventName
+	bSignUpTank = self.wndSignUp:FindChild("TankRoleButton"):IsChecked()
+	bSignUpHealer = self.wndSignUp:FindChild("HealerRoleButton"):IsChecked()
+	bSignUpDPS = self.wndSignUp:FindChild("DPSRoleButton"):IsChecked()
+	local NewAttendeeInfo = {["Name"] = GameLib.GetPlayerUnit():GetName(),["nSignUpTime"] = os.time(), 
+							["Roles"] = self:GetSelectedRoles(bSignUpTank ,bSignUpHealer ,bSignUpDPS )}
+	for idx, events in pairs(self.tEvents) do
+	CurrentAttendees = self.tEvents[idx].Detail.tCurrentAttendees
+		if self.tEvents[idx].EventId == EventId then
+			table.insert(CurrentAttendees,NewAttendeeInfo)
+		end
+	end
+	
+	Print("Sign Up Completed for "..EventName)
+	self:PopulateItemList(self.tEvents)
+	self.wndSignUp:Show(false)
+	self.tMetaData.nLatestUpdate = os.time()
+end
+
+function EventManager:OnWindowManagementReady()
+	Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndMain, strName = "Event Manager"})
+	Event_FireGenericEvent("WindowManagementAdd", {wnd = self.wndNewEvent,strName = "New Event Form"})
+end
+
+function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
+	self.wndNew = wndControl:GetParent()
+	NewEventEntry = {}
+	
+	table.insert(self.tEvents,{
+		nEventSortValue = "",
+		EventId = GameLib.GetRealmName()..os.time(),
+		Detail  = {
+			EventName = self.wndNew:FindChild("EventNameBox"):GetText(),
+			Month = tonumber(self.wndNew:FindChild("EventMonthBox"):GetText()),
+			Day = tonumber(self.wndNew:FindChild("EventDayBox"):GetText()),
+			Year = tonumber(self.wndNew:FindChild("EventYearBox"):GetText()),
+			Hour = tonumber(self.wndNew:FindChild("EventHourBox"):GetText()),
+			Minute = tonumber(self.wndNew:FindChild("EventMinuteBox"):GetText()),
+			AmPm = string.lower(self.wndNew:FindChild("EventAmPmBox"):GetText()),
+			TimeZone = string.lower(os.date("%Z")),
+			MaxAttendees = tonumber(self.wndNew:FindChild("EventMaxAttendeesBox"):GetText()),
+			MaxTanks = tonumber(self.wndNew:FindChild("EventMaxTanksBox"):GetText()),
+			MaxHealers = tonumber(self.wndNew:FindChild("EventMaxHealersBox"):GetText()),
+			MaxDps = tonumber(self.wndNew:FindChild("EventMaxDPSBox"):GetText()),
+			Description = self.wndNew:FindChild("EventDescriptionBox"):GetText(),
+			Creator = GameLib.GetPlayerUnit():GetName(),
+			--CreatorRoles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS),
+			bCreatorTank = self.wndNewEvent:FindChild("TankRoleButton"):IsChecked(),
+			bCreatorHealer = self.wndNewEvent:FindChild("HealerRoleButton"):IsChecked(),
+			bCreatorDPS = self.wndNewEvent:FindChild("DPSRoleButton"):IsChecked(),
+			tCurrentAttendees = {{Name = GameLib.GetPlayerUnit():GetName(),nSignUpTime = os.time(),
+							Roles = self:GetSelectedRoles(bCreatorTank,bCreatorHealer,bCreatorDPS)}},	
+			strRealm = GameLib.GetRealmName(),
+
+			
+		},
+		
+	})
+	
+	for idx, event in pairs(self.tEvents) do
+		self.tEvents[idx].nEventSortValue = self:CreateSortValue(self.tEvents[idx].Detail)
+		CurrentLocalTime = os.time()
+		if self.tEvents[idx].nEventSortValue < CurrentLocalTime then
+			Print("Event Manager Error: New events cannot be created in the past.")
+			table.remove(tEvents,idx)
+		end
+		
+	end
+	
+				
+	table.sort(self.tEvents,SortEventsByDate)
+	self.wndNew:Show(false)
+	self:PopulateItemList(self.tEvents)
+	self.tMetaData.nLatestUpdate = os.time()
+end
+
+
+
+-----------------------------------------------------------------------------------------------
+-- ItemList Functions
+-----------------------------------------------------------------------------------------------
+-- populate item list
+function EventManager:PopulateItemList(list)
+	-- make sure the item list is empty to start with
+	self:DestroyItemList()
+	if list == nil then return
+	else 
+	    -- add 20 items
+		for i = 1,#list do
+	        self:AddItem(i)
+		end
+		
+		-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
+		self.wndItemList:ArrangeChildrenVert()
+	end
+end
+
+-- clear the item list
+function EventManager:DestroyItemList()
+	-- destroy all the wnd inside the list
+	for idx,wnd in ipairs(self.tItems) do
+		wnd:Destroy()
+	end
+
+	-- clear the list item array
+	self.tItems = {}
+	self.wndSelectedListItem = nil
+end
+
+-- add an item into the item list
+function EventManager:AddItem(i)
+	-- load the window item for the list item
+	local wnd = Apollo.LoadForm(self.xmlDoc, "ListItem", self.wndItemList, self)
+	
+	-- keep track of the window item created
+	self.tItems[i] = wnd
+	local tEvent = self.tEvents[i]
+	local tEventInfo = tEvent.Detail
+	local tEventAttendees = tEventInfo.tCurrentAttendees
+	local tEventRoles = tEventInfo.tCurrentAttendees
+	if not tEventAttendees then
+		tEventInfo.nEventAttendeeCount = 0 
+	else tEventInfo.nEventAttendeeCount = self:TableLength(tEventAttendees)
+	end
+	if not tEventRoles then
+		tEventInfo.nCurrentTanks = 0
+		tEventInfo.nCurrentHealers = 0
+		tEventInfo.nCurrentDPS = 0
+	else
+		tEventInfo.nCurrentTanks, tEventInfo.nCurrentHealers, tEventInfo.nCurrentDPS = self:RoleCount(tEventRoles,nCurrentTanks,nCurrentHealers,nCurrentDPS)
+	end
+	local strEventInfo = 	tEventInfo.EventName..".  Attendees: "..tEventInfo.nEventAttendeeCount.."/"..tEventInfo.MaxAttendees..". \n"..
+							string.format("%02d",tEventInfo.Month).."/"..string.format("%02d",tEventInfo.Day).."/"..tEventInfo.Year..", "..
+							string.format("%02d",tEventInfo.Hour)..":"..string.format("%02d",tEventInfo.Minute).." "..tEventInfo.AmPm..
+							" "..string.upper(tEventInfo.TimeZone).."\nAttendees by Role: (tank/healer/dps)  "..tEventInfo.nCurrentTanks.."/"..
+							tEventInfo.nCurrentHealers.."/"..tEventInfo.nCurrentDPS
+	-- give it a piece of data to refer to 
+	local wndItemText = wnd:FindChild("Text")
+	if wndItemText then -- make sure the text wnd exist
+		wndItemText:SetText(strEventInfo) -- set the item wnd's text to "item i"
+		wndItemText:SetTextColor(kcrNormalText)
+	end
+	
+	wnd:SetData(tEvent)
+end
+
+-- when a list item is selected
+function EventManager:OnListItemSelected(wndHandler, wndControl)
+    -- make sure the wndControl is valid
+    if wndHandler ~= wndControl then
+        return
+    end
+    
+    -- change the old item's text color back to normal color
+    local wndItemText
+    if self.wndSelectedListItem then
+        wndItemText = self.wndSelectedListItem:FindChild("Text")
+        wndItemText:SetTextColor(kcrNormalText)
+    end
+    
+	-- wndControl is the item selected - change its color to selected
+	self.wndSelectedListItem = wndControl
+	wndItemText = self.wndSelectedListItem:FindChild("Text")
+    wndItemText:SetTextColor(kcrSelectedText)
+    local selectedItemText = self.wndSelectedListItem:GetData().Detail
+	Print(selectedItemText.EventName.. " on ".. string.format("%02d",selectedItemText.Month).."/"..string.format("%02d",selectedItemText.Day).."/"..selectedItemText.Year.." at "..
+	string.format("%02d",selectedItemText.Hour)..":"..string.format("%02d",selectedItemText.Minute).." "..string.upper(selectedItemText.TimeZone).. " is selected.")
+end
+
+
+-----------------------------------------------------------------------------------------------
+-- EventManager Instance
+-----------------------------------------------------------------------------------------------
+local EventManagerInst = EventManager:new()
+EventManagerInst:Init()
