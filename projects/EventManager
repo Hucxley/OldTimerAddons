@@ -16,6 +16,7 @@ local TankRoleStatus = 0
 local HealerRoleStatus = 0
 local DPSRoleStatus = 0
 local MetaData = ""
+local EventsChan = ""
  
  
 -----------------------------------------------------------------------------------------------
@@ -126,6 +127,7 @@ function EventManager:OnDocLoaded()
 		if tMetaData ~= nil then
 			self.tMetaData = tMetaData
 			self.tMetaData.nLatestUpdate = self.tMetaData.nLatestUpdate
+			EventsChan = ICCommLib.JoinChannel(self.tMetaData.SyncChannel, "OnEventManagerMessage", self)
 		else
 			self.tMetaData = {}
 			self.tMetaData.nLatestUpdate = 0
@@ -262,13 +264,14 @@ function EventManager:OnEventManagerMessage(channel, tMsg)
 	if not tMsg.MetaData.Passphrase or tMsg.MetaData.Passphrase ~= self.tMetaData.Passphrase then
 		return
 	end
+	local channel = channel
 	
     if tMsg.MetaData.nLatestUpdate < self.tMetaData.nLatestUpdate then
-        self.EventsChan:SendMessage({self.tMetaData,self.tEvents})
+        EventsChan:SendMessage({self.tMetaData,self.tEvents})
 	else
 		self.tMetaData = tMsg.MetaData
 		self.tEvents = tMsg.tEvents
-		Print("New Events received on sync channel "..channel)
+		Print("New Events received on sync channel.")
     end
 
 	self:PopulateItemList(self.tEvents)
@@ -276,20 +279,20 @@ function EventManager:OnEventManagerMessage(channel, tMsg)
 
 end
 
-function EventManager:EventsMessenger( )
+function EventManager:EventsMessenger()
 	self.tMetaData = self.tMetaData
    	local tEvents = self.tEvents
     
 
-    -- prepare our message to send to other Dotter users
+    -- prepare our message to send to other users
     local t = {}
     t.MetaData = self.tMetaData
     t.tEvents = tEvents
     
     -- send the message to other users
-    self.EventsChan:SendMessage(t)
+    EventsChan:SendMessage(t)
 	Print("Events update sent to sync'd users.")
-    -- here we "send" the message to ourselves by calling OnDotMessage directly
+    -- here we "send" the message to ourselves by calling OnEventManagerMessage directly
     self:OnEventManagerMessage(nil, t)
 end
 
@@ -325,7 +328,8 @@ function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)
 	self.tMetaData.SyncChannel = SyncChannel
 	self.tMetaData.SyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
 	self.tMetaData.Passphrase = self.wndOptions:FindChild("PassphraseBox"):GetText()
-	self.EventsChan = ICCommLib.JoinChannel(self.tMetaData.SyncChannel, "OnEventManagerMessage", self)
+	EventsChan = ICCommLib.JoinChannel(SyncChannel, "OnEventManagerMessage", self)
+	Print("Joined sync channel "..SyncChannel)
 	wndControl:GetParent():Show(false)
 	
 end
@@ -377,6 +381,7 @@ function EventManager:OnSignUpSubmit(wndHandler, wndControl, eMouseButton)
 	self:PopulateItemList(self.tEvents)
 	self.wndSignUp:Show(false)
 	self.tMetaData.nLatestUpdate = os.time()
+	self:EventsMessenger()
 end
 
 function EventManager:OnWindowManagementReady()
@@ -434,6 +439,7 @@ function EventManager:OnSaveNewEvent(wndHandler, wndControl, eMouseButton)
 	self.wndNew:Show(false)
 	self:PopulateItemList(self.tEvents)
 	self.tMetaData.nLatestUpdate = os.time()
+	self:EventsMessenger()
 end
 
 
@@ -455,6 +461,7 @@ function EventManager:PopulateItemList(list)
 		-- now all the item are added, call ArrangeChildrenVert to list out the list items vertically
 		self.wndItemList:ArrangeChildrenVert()
 	end
+
 end
 
 -- clear the item list
