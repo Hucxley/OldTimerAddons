@@ -10,13 +10,13 @@ require "ICCommLib"
 -- EventManager Module Definition
 -----------------------------------------------------------------------------------------------
 local EventManager = {}   --need to remove closing bracket if merging 
-local tEvents = {}
-local tMetaData = {nLatestUpdate = "" ,SyncChannel = "" ,Passphrase = ""}
+tEvents = {}
+tMetaData = {nLatestUpdate = "" ,SyncChannel = "" ,Passphrase = ""}
 local TankRoleStatus = 0	
 local HealerRoleStatus = 0
 local DPSRoleStatus = 0
 local MetaData = ""
-local EventsChan = ""
+EventsChan = ""
  
  
 -----------------------------------------------------------------------------------------------
@@ -261,15 +261,15 @@ function EventManager:CreateAttendeeInfo(Creator,time,Roles)
 end	
 
 function EventManager:OnEventManagerMessage(channel, tMsg)
-	if not tMsg.MetaData.Passphrase or tMsg.MetaData.Passphrase ~= self.tMetaData.Passphrase then
+	if tMsg.tMetaData.Passphrase ~= self.tMetaData.Passphrase then
 		return
 	end
-	local channel = channel
+	channel = channel
 	
-    if tMsg.MetaData.nLatestUpdate < self.tMetaData.nLatestUpdate then
-        EventsChan:SendMessage({self.tMetaData,self.tEvents})
+    if tMsg.tMetaData.nLatestUpdate < self.tMetaData.nLatestUpdate then
+        EventsChan:SendMessage({tMetaData = self.tMetaData,tEvents = self.tEvents})
 	else
-		self.tMetaData = tMsg.MetaData
+		self.tMetaData = tMsg.tMetaData
 		self.tEvents = tMsg.tEvents
 		Print("New Events received on sync channel.")
     end
@@ -285,9 +285,9 @@ function EventManager:EventsMessenger()
     
 
     -- prepare our message to send to other users
-    local t = {}
-    t.MetaData = self.tMetaData
-    t.tEvents = tEvents
+    t = {}
+    t.tMetaData = self.tMetaData
+    t.tEvents = self.tEvents
     
     -- send the message to other users
     EventsChan:SendMessage(t)
@@ -324,12 +324,12 @@ end
 
 function EventManager:OnOptionsSubmit (wndHandler, wndControl, eMouseButton)
 	self.wndOptions = wndControl:GetParent()
-	local SyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
+	local strSyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
 	self.tMetaData.SyncChannel = SyncChannel
 	self.tMetaData.SyncChannel = self.wndOptions:FindChild("SyncChannelBox"):GetText()
 	self.tMetaData.Passphrase = self.wndOptions:FindChild("PassphraseBox"):GetText()
-	EventsChan = ICCommLib.JoinChannel(SyncChannel, "OnEventManagerMessage", self)
-	Print("Joined sync channel "..SyncChannel)
+	EventsChan = ICCommLib.JoinChannel(strSyncChannel, "OnEventManagerMessage", self)
+	Print("Joined sync channel "..strSyncChannel)
 	wndControl:GetParent():Show(false)
 	
 end
